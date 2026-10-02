@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local development. In production set these with `wrangler secret put`.
+JWT_SECRET=""          # required: random string, e.g. `openssl rand -hex 32`
+ADMIN_TOKEN=""         # required for /api/admin/*: random string
+OPENAI_API_KEY=""      # optional: OpenAI fallback through AI Gateway
+ANTHROPIC_API_KEY=""   # optional: Claude fallback through AI Gateway
+TAVILY_API_KEY=""      # optional: better web search for the research agent (default: Wikipedia)

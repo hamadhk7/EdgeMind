@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EdgeMind</title>
+    <meta name="description" content="Multi-agent AI on Cloudflare's edge: orchestrator, research, RAG, code and summarizer agents working together." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f6821f'/><circle cx='11' cy='12' r='3' fill='white'/><circle cx='21' cy='12' r='3' fill='white'/><circle cx='16' cy='22' r='3' fill='white'/><path d='M11 12L21 12L16 22Z' stroke='white' stroke-width='1.5' fill='none'/></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js" defer></script>
+    <script src="/app.js" type="module"></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><circle cx="11" cy="12" r="3" /><circle cx="21" cy="12" r="3" /><circle cx="16" cy="22" r="3" /><path d="M11 12L21 12L16 22Z" /></svg>
+          </div>
+          <div>
+            <div class="brand-name">EdgeMind</div>
+            <div class="brand-sub">Multi-agent AI on the edge</div>
+          </div>
+        </div>
+
+        <button class="btn primary block" id="new-chat">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          New conversation
+        </button>
+
+        <section class="panel">
+          <h2>Conversations</h2>
+          <ul class="list" id="conversations"></ul>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Documents</h2>
+            <label class="btn ghost small" title="Upload txt, md, csv, json, html, pdf or docx (max 10 MB)">
+              <input type="file" id="upload" accept=".txt,.md,.markdown,.csv,.json,.html,.htm,.pdf,.docx" hidden />
+              Upload
+            </label>
+          </div>
+          <ul class="list" id="documents"><li class="empty">Upload files and the RAG agent will search them.</li></ul>
+        </section>
+
+        <section class="panel">
+          <h2>Memory</h2>
+          <ul class="list" id="memories"><li class="empty">Durable facts the agents learn about you appear here.</li></ul>
+        </section>
+
+        <section class="usage" id="usage">
+          <div class="usage-row"><span>Today's tokens</span><span id="usage-text">–</span></div>
+          <div class="meter"><div class="meter-fill" id="usage-fill"></div></div>
+        </section>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <button class="icon-btn menu" id="menu" aria-label="Toggle sidebar">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <div class="title" id="title">New conversation</div>
+          <div class="status" id="status"><span class="dot"></span><span class="status-text">Connecting</span></div>
+        </header>
+
+        <div class="messages" id="messages">
+          <div class="welcome" id="welcome">
+            <h1>Ask the agent team anything.</h1>
+            <p>
+              An <strong>orchestrator</strong> plans your request and dispatches subtasks over Cloudflare Queues to
+              <strong>research</strong>, <strong>RAG</strong> and <strong>code</strong> agents, each a stateful Durable Object.
+              A <strong>summarizer</strong> streams back the combined answer.
+            </p>
+            <div class="suggestions">
+              <button class="chip" data-prompt="How do Cloudflare Durable Objects work, and write a TypeScript counter using one">Research + code</button>
+              <button class="chip" data-prompt="Compare vector databases for RAG on the edge">Research</button>
+              <button class="chip" data-prompt="Summarize the key points of my uploaded documents">Ask my documents</button>
+              <button class="chip" data-prompt="The state of WebAssembly outside the browser" data-mode="deep">Deep research report</button>
+            </div>
+          </div>
+        </div>
+
+        <form class="composer" id="composer">
+          <div class="mode" role="radiogroup" aria-label="Mode">
+            <button type="button" class="mode-btn active" data-mode="auto" role="radio" aria-checked="true">Auto</button>
+            <button type="button" class="mode-btn" data-mode="deep" role="radio" aria-checked="false">Deep research</button>
+          </div>
+          <div class="input-row">
+            <textarea id="input" rows="1" placeholder="Message the agents…" maxlength="4000" autocomplete="off"></textarea>
+            <button class="btn primary send" id="send" type="submit" aria-label="Send">
+              <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </button>
+          </div>
+          <div class="hint">Enter to send · Shift+Enter for a new line · Guest sessions have a daily token budget</div>
+        </form>
+      </main>
+    </div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+  </body>
+</html>

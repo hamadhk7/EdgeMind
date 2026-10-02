@@ -1,0 +1,114 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "edgemind",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "keep_names": true,
+
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/agents/*"]
+  },
+
+  "vars": {
+    "AI_GATEWAY_ID": "default",
+    "ENVIRONMENT": "production"
+  },
+
+  "ai": { "binding": "AI" },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "OrchestratorAgent", "class_name": "OrchestratorAgent" },
+      { "name": "ResearchAgent", "class_name": "ResearchAgent" },
+      { "name": "RagAgent", "class_name": "RagAgent" },
+      { "name": "CodeAgent", "class_name": "CodeAgent" },
+      { "name": "SummarizerAgent", "class_name": "SummarizerAgent" }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "OrchestratorAgent",
+        "ResearchAgent",
+        "RagAgent",
+        "CodeAgent",
+        "SummarizerAgent"
+      ]
+    }
+  ],
+
+  "workflows": [
+    {
+      "name": "edgemind-ingest-document",
+      "binding": "INGEST_WORKFLOW",
+      "class_name": "IngestDocumentWorkflow"
+    },
+    {
+      "name": "edgemind-deep-research",
+      "binding": "DEEP_RESEARCH_WORKFLOW",
+      "class_name": "DeepResearchWorkflow"
+    }
+  ],
+
+  "queues": {
+    "producers": [{ "binding": "AGENT_TASKS", "queue": "edgemind-agent-tasks" }],
+    "consumers": [
+      {
+        "queue": "edgemind-agent-tasks",
+        "max_batch_size": 4,
+        "max_batch_timeout": 1,
+        "max_retries": 3,
+        "retry_delay": 5,
+        "dead_letter_queue": "edgemind-agent-tasks-dlq"
+      },
+      {
+        "queue": "edgemind-agent-tasks-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5
+      }
+    ]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "edgemind-db",
+      "database_id": "49cc663d-56c0-4a13-bd1d-109097c09d16",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "kv_namespaces": [
+    { "binding": "KV", "id": "86590d5e8fd14c35846b5aa9d067d426" }
+  ],
+
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "edgemind-files" }],
+
+  "vectorize": [{ "binding": "VECTORS", "index_name": "edgemind-index" }],
+
+  "ratelimits": [
+    {
+      "name": "SESSION_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 5, "period": 60 }
+    },
+    {
+      "name": "MESSAGE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "UPLOAD_LIMITER",
+      "namespace_id": "1003",
+      "simple": { "limit": 5, "period": 60 }
+    }
+  ]
+}
