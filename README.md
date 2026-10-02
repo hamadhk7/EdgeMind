@@ -10,6 +10,24 @@ Each agent is a stateful Durable Object built with the Cloudflare Agents SDK. Lo
 
 ---
 
+## Live deployment
+
+Deployed at **https://edgemind.edgemind.workers.dev** on a Cloudflare Workers **Free** account (no payment card; files stored in KV).
+
+**Try it:** open the link (a guest session is created automatically), click **Research + code**, and expand the agent trace to watch the plan, each agent's status and the streamed answer. Switch to **Deep research** mode for a multi-round report you can download.
+
+**Verified against the live site with real Workers AI models** (`npm run smoke -- https://edgemind.edgemind.workers.dev`):
+
+| Scenario | Path | Result |
+|---|---|---|
+| "What is Cloudflare Workers AI?" | Planner chose `direct` | Answered in **9 s**, 412 tokens, ~$0.00005 |
+| "Look up how Durable Objects work, then write a TypeScript counter" | Planner chose `delegate`: research → code (dependent) → summarizer, over Queues | Answered in **72 s**, 4,639 tokens, ~$0.001 |
+| Health check | D1, KV, file storage (KV), Vectorize | All OK |
+
+Document upload and deep research are covered by the local test suite (workerd + Miniflare) and have not been run against the live site yet.
+
+**Known limitation:** delegated runs are slow (about a minute). The time goes on dependent agents running one after another (research, then code, then synthesis), each one a queue hop plus a model call. The run timeout is 120 s, so a heavier request can finish with partial results.
+
 ## What it does
 
 - **Planning.** The orchestrator asks a model to choose a mode: answer directly, delegate to 1–4 specialist subtasks (with dependencies between them), or start a deep research job.
