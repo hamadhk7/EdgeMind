@@ -29,6 +29,8 @@ const PLAIN_TEXT = new Set(["text/plain", "text/markdown", "text/csv", "applicat
  * Document ingestion as a durable Workflow:
  *   stored file -> text (Workers AI toMarkdown for PDF/DOCX/HTML) -> chunks in D1
  *   -> embeddings in batches -> Vectorize (namespace = user) -> status "ready".
+ * Chunks are keyword-searchable (D1 FTS5) immediately; vectors follow once Vectorize
+ * applies the upserts, and the RAG agent merges both.
  * Each batch is its own step, so a failure mid-way retries only that batch.
  */
 export class IngestDocumentWorkflow extends WorkflowEntrypoint<Env, IngestParams> {

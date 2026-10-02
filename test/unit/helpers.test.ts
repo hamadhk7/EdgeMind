@@ -7,6 +7,7 @@ import { estimateCost } from "../../src/lib/usage";
 import { hashEmbedding } from "../../src/llm/fake";
 import { extractJson, parseCompletion, sseToTextStream } from "../../src/llm/parse";
 import { chunkText } from "../../src/memory/chunker";
+import { ftsQuery } from "../../src/memory/retrieval";
 import { cosine } from "../../src/memory/vectorStore";
 
 describe("chunkText", () => {
@@ -137,5 +138,15 @@ describe("misc", () => {
     const c = hashEmbedding("banana bread recipe");
     expect(cosine(a, b)).toBeGreaterThan(cosine(a, c));
     expect(a).toHaveLength(768);
+  });
+});
+
+describe("ftsQuery", () => {
+  it("keeps significant terms, drops stopwords, quotes each term", () => {
+    expect(ftsQuery("According to my uploaded documents, what is the Falcon-7 launch date?")).toBe(
+      '"falcon-7" OR "launch" OR "date"',
+    );
+    expect(ftsQuery("what is it?")).toBeNull();
+    expect(ftsQuery('evil" OR 1=1 --')).toBe('"evil"');
   });
 });

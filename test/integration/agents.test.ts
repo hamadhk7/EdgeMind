@@ -170,6 +170,36 @@ describe("multi-agent runs", () => {
     expect(memories[0]?.text).toContain("Ada");
   });
 
+  it("finds a just-uploaded document through hybrid retrieval", async () => {
+    const { token } = await guest();
+    const form = new FormData();
+    form.append(
+      "file",
+      new File(["Project notes.\n\nThe codename is Falcon-7 and the launch date is March 14, 2027."], "notes.md"),
+    );
+    const { document } = await json<{ document: { id: string } }>(
+      await call("/api/documents", { method: "POST", token, body: form }),
+    );
+    await poll(
+      async () => (await json<{ document: { status: string } }>(await call(`/api/documents/${document.id}`, { token }))).document.status,
+      (s) => s === "ready",
+    );
+
+    const convo = await newConversation(token);
+    const socket = await connect(convo.agentPath, token);
+    await socket.waitFor((e) => e.type === "history");
+    socket.send({ type: "chat", text: "What is the Falcon-7 launch date in my notes?" });
+    const plan = (await socket.waitFor((e) => e.type === "plan")) as PlanEvent;
+    expect(plan.subtasks.map((s) => s.agent)).toContain("rag");
+    const rag = (await socket.waitFor((e) => e.type === "subtask" && e.agent === "rag" && e.status === "completed")) as Extract<
+      ServerEvent,
+      { type: "subtask" }
+    >;
+    expect(rag.sources?.[0]?.title).toBe("notes.md");
+    await socket.waitFor((e) => e.type === "final");
+    socket.close();
+  });
+
   it("replays history to a reconnecting client", async () => {
     const { token } = await guest();
     const convo = await newConversation(token);

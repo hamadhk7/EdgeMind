@@ -22,9 +22,9 @@ Deployed at **https://edgemind.edgemind.workers.dev** on a Cloudflare Workers **
 |---|---|---|
 | "What is Cloudflare Workers AI?" | Planner chose `direct` | Answered in **9 s**, 412 tokens, ~$0.00005 |
 | "Look up how Durable Objects work, then write a TypeScript counter" | Planner chose `delegate`: research → code (dependent) → summarizer, over Queues | Answered in **72 s**, 4,639 tokens, ~$0.001 |
+| Upload a `.md` file, then ask "what is the project codename and launch date?" | Ingest Workflow → planner chose `delegate`: rag → summarizer | Document ready in **9.6 s**; correct answer with a citation to the file, **25 s** |
+| Deep research mode: "Edge AI inference on CDNs" | `DeepResearchWorkflow`: 3 rounds, 9 searches, report saved and downloadable | Report with **24 sources** in **100 s** |
 | Health check | D1, KV, file storage (KV), Vectorize | All OK |
-
-Document upload and deep research are covered by the local test suite (workerd + Miniflare) and have not been run against the live site yet.
 
 **Known limitation:** delegated runs are slow (about a minute). The time goes on dependent agents running one after another (research, then code, then synthesis), each one a queue hop plus a model call. The run timeout is 120 s, so a heavier request can finish with partial results.
 
@@ -33,7 +33,7 @@ Document upload and deep research are covered by the local test suite (workerd +
 - **Planning.** The orchestrator asks a model to choose a mode: answer directly, delegate to 1–4 specialist subtasks (with dependencies between them), or start a deep research job.
 - **Specialist agents**, one Durable Object per user per type:
   - **Research** searches the web (Wikipedia by default, Tavily if you add a key) and writes cited findings.
-  - **RAG** answers from the user's uploaded documents using Vectorize semantic search.
+  - **RAG** answers from the user's uploaded documents using hybrid retrieval: D1 full-text search (BM25) plus Vectorize semantic search, merged with reciprocal rank fusion. New uploads are searchable immediately, before Vectorize finishes indexing.
   - **Code** writes, explains and reviews code, using the other agents' output as context.
   - **Summarizer** merges every result into one cited answer, streamed token by token. It also extracts durable facts about the user into long-term memory.
 - **Event-driven fan-out.** Subtasks travel over Cloudflare Queues. Failed tasks retry with exponential backoff. After the last retry they go to a dead-letter queue, and the run finishes with partial results instead of hanging.
@@ -97,6 +97,7 @@ flowchart LR
 | Workflows only for long multi-step jobs | Per-step retries and resumability where they matter (ingestion, deep research). Short subtasks skip the step overhead. |
 | All model calls through one `LLMClient` | One place for AI Gateway metadata, fallback, usage accounting, and an offline fake used by tests. |
 | Vectorize namespace = user ID | Tenant isolation is enforced by the index, not just by a filter. |
+| Hybrid retrieval (FTS5 + Vectorize) | Vectorize applies writes asynchronously (seconds to minutes), so keyword search makes fresh uploads answerable immediately; it also catches exact terms (codes, names) that embeddings miss. |
 | Model IDs in KV | Swap models (for example when a model goes Paid-only) without a deploy. |
 
 ## Quick start (no Cloudflare account needed)
