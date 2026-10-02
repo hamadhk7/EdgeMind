@@ -1,10 +1,12 @@
 # EdgeMind
 
+**Live demo: https://edgemind.edgemind.workers.dev**
+
 **A multi-agent AI backend running entirely on Cloudflare's edge.** An orchestrator agent plans each request, fans subtasks out to specialist agents over a queue, and streams one combined answer back over WebSockets, with no servers to manage.
 
-Each agent is a stateful Durable Object built with the Cloudflare Agents SDK. Long-running jobs run as durable Workflows. Every model call goes through AI Gateway. The whole stack fits in the Workers **Free** plan.
+Each agent is a stateful Durable Object built with the Cloudflare Agents SDK. Long-running jobs run as durable Workflows. Every model call goes through AI Gateway. The whole stack runs on the Workers **Free** plan, with no payment card required.
 
-> TypeScript · Workers · Agents SDK · Durable Objects · Workers AI · AI Gateway · Vectorize · D1 · R2 · KV · Queues · Workflows · Hono
+> TypeScript · Workers · Agents SDK · Durable Objects · Workers AI · AI Gateway · Vectorize · D1 · KV / R2 · Queues · Workflows · Hono
 
 ---
 
@@ -54,7 +56,7 @@ flowchart LR
 
     G & S & O --> V[("Vectorize<br/>docs + memories")]
     W & O & C --> D1[("D1<br/>users · tasks · usage · audit")]
-    IN & DR --> R2[("R2<br/>documents · reports")]
+    IN & DR --> R2[("KV or R2<br/>documents · reports")]
     W --> KV[("KV<br/>config · key cache")]
 ```
 
@@ -88,7 +90,7 @@ cp .dev.vars.example .dev.vars   # set JWT_SECRET and ADMIN_TOKEN to any random 
 npm run dev:offline              # http://localhost:8787
 ```
 
-Offline mode replaces Workers AI with a deterministic stand-in model and replaces Vectorize with a D1-backed cosine search. Every flow still runs for real, including queues, Durable Objects, Workflows, R2, D1 and KV, so you can try the UI and the agent pipeline without an account.
+Offline mode replaces Workers AI with a deterministic stand-in model and replaces Vectorize with a D1-backed cosine search. Every flow still runs for real, including queues, Durable Objects, Workflows, D1 and KV, so you can try the UI and the agent pipeline without an account.
 
 ## Deploy to Cloudflare
 
@@ -97,7 +99,7 @@ npx wrangler login
 npm run setup
 ```
 
-`scripts/setup.sh` creates the D1 database, KV namespace, R2 bucket, Vectorize index (with metadata indexes) and both queues. It also writes the resource IDs into `wrangler.jsonc`, applies migrations, deploys, and sets `JWT_SECRET` / `ADMIN_TOKEN`. It is safe to re-run. AI Gateway uses the `default` gateway, which Cloudflare creates automatically on first use.
+`scripts/setup.sh` creates the D1 database, KV namespace, Vectorize index (with metadata indexes) and both queues. It also writes the resource IDs into `wrangler.jsonc`, applies migrations, deploys, and sets `JWT_SECRET` / `ADMIN_TOKEN`. It is safe to re-run. AI Gateway uses the `default` gateway, which Cloudflare creates automatically on first use.
 
 Optional secrets:
 
@@ -113,6 +115,14 @@ Verify the deployment end to end:
 npm run smoke -- https://edgemind.<your-subdomain>.workers.dev
 ```
 
+### File storage: KV by default, R2 optional
+
+Uploaded documents and research reports go through a small `FileStore` interface ([`src/lib/files.ts`](src/lib/files.ts)). By default it uses KV, so the project deploys on a Free account without enabling R2, which needs a payment card. To use R2 instead, add this to `wrangler.jsonc` and redeploy; no code changes are needed:
+
+```jsonc
+"r2_buckets": [{ "binding": "FILES", "bucket_name": "edgemind-files" }]
+```
+
 ### Free plan fit
 
 | Limit (Workers Free) | How EdgeMind stays inside it |
@@ -121,6 +131,7 @@ npm run smoke -- https://edgemind.<your-subdomain>.workers.dev
 | 10 ms CPU per invocation | Waiting on models and the network does not count; CPU-heavy work (chunking) runs in Workflow steps |
 | 10,000 queue operations/day | At most 4 subtasks per request |
 | 100 concurrent Workflow instances | Deep research is opt-in; it is capped at 3 rounds |
+| KV: 1,000 writes/day, 25 MiB per value | Uploads capped at 10 MB; each upload costs 2 writes (original + extracted text) |
 
 ## Configuration
 
@@ -139,7 +150,7 @@ All `/api/*` routes except `health` and `session` need `Authorization: Bearer <g
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/api/health` | Probes D1, KV, R2, Vectorize |
+| GET | `/api/health` | Probes D1, KV, file storage, Vectorize |
 | POST | `/api/session` | New guest token (send an existing one to refresh it) |
 | GET | `/api/me` | Caller, tokens used today, daily budget |
 | GET / POST | `/api/conversations` | List / create conversations (returns `agentPath` for the WebSocket) |
@@ -183,7 +194,7 @@ npm run typecheck
 ```
 
 - **Unit:** plan validation and cycle breaking, DAG readiness, chunking, JWT (tampering and expiry), API keys, SSE stream parsing, citation renumbering.
-- **Integration:** auth and tenant isolation, rate limiting, API-key lifecycle, document ingestion through the Workflow into vectors, a direct run, a delegated run with dependencies over the real queue, a dead-letter run that finishes with partial results, a deep-research Workflow writing to R2, memory across conversations, history replay on reconnect.
+- **Integration:** auth and tenant isolation, rate limiting, API-key lifecycle, document ingestion through the Workflow into vectors, a direct run, a delegated run with dependencies over the real queue, a dead-letter run that finishes with partial results, a deep-research Workflow writing its report to file storage, memory across conversations, history replay on reconnect.
 
 ## Project layout
 
@@ -198,7 +209,7 @@ src/
   research/             web search + research step shared by agent and workflow
   auth/                 HS256 JWT, API keys, principal resolution
   api/                  REST routes
-  lib/                  config, usage and budget, audit, logger, errors, types
+  lib/                  config, file storage (KV/R2), usage and budget, audit, logger, errors, types
 public/                 web UI (no build step)
 migrations/             D1 schema
 test/                   unit + integration tests

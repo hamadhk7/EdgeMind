@@ -90,8 +90,6 @@
     { "binding": "KV", "id": "86590d5e8fd14c35846b5aa9d067d426" }
   ],
 
-  "r2_buckets": [{ "binding": "FILES", "bucket_name": "edgemind-files" }],
-
   "vectorize": [{ "binding": "VECTORS", "index_name": "edgemind-index" }],
 
   "ratelimits": [

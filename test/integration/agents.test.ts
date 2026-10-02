@@ -2,6 +2,7 @@ import { createExecutionContext, createMessageBatch, env, getQueueResult } from 
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import worker from "../../src/index";
+import { createFileStore } from "../../src/lib/files";
 import type { QueueMessage, ServerEvent, SubtaskEnvelope } from "../../src/lib/types";
 import { BASE, call, connect, guest, json, newConversation, poll } from "../helpers";
 
@@ -133,7 +134,7 @@ describe("multi-agent runs", () => {
     socket.close();
   });
 
-  it("runs deep research as a workflow and stores the report in R2", async () => {
+  it("runs deep research as a workflow and stores the report", async () => {
     const { token, userId } = await guest();
     const convo = await newConversation(token);
     const socket = await connect(convo.agentPath, token);
@@ -146,7 +147,7 @@ describe("multi-agent runs", () => {
     expect(final.reportUrl).toBe(`/api/reports/${plan.runId}`);
     expect(socket.events.some((e) => e.type === "research_progress")).toBe(true);
 
-    const stored = await env.FILES.get(`reports/${userId}/${plan.runId}.md`);
+    const stored = await createFileStore(env).get(`reports/${userId}/${plan.runId}.md`);
     expect(await stored?.text()).toContain("Research report");
     const report = await call(final.reportUrl!, { token });
     expect(report.status).toBe(200);

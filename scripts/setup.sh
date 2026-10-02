@@ -4,6 +4,8 @@
 # Safe to re-run: existing resources are reused.
 #
 # Requires: `npx wrangler login` (or CLOUDFLARE_API_TOKEN), Node 20+, openssl.
+# Works on the Workers Free plan with no card: files are stored in KV unless an
+# R2 bucket binding named FILES is added to wrangler.jsonc.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -24,16 +26,6 @@ step "KV namespace"
 $WR kv namespace create edgemind-kv >/dev/null 2>&1 || true
 KV_ID=$($WR kv namespace list | node -e 'const l=JSON.parse(require("fs").readFileSync(0,"utf8"));const n=l.find(x=>x.title==="edgemind-kv"||x.title.endsWith("edgemind-kv"));if(!n)process.exit(1);console.log(n.id)')
 ok "edgemind-kv ($KV_ID)"
-
-step "R2 bucket"
-if ! $WR r2 bucket list 2>/dev/null | grep -q "name:\s*edgemind-files"; then
-  if ! out=$($WR r2 bucket create edgemind-files 2>&1); then
-    echo "$out" | grep -E "ERROR|code:" || echo "$out"
-    echo "  R2 is not enabled on this account. Enable it in the dashboard (R2 > Overview), then re-run this script."
-    exit 1
-  fi
-fi
-ok "edgemind-files"
 
 step "Vectorize index"
 $WR vectorize create edgemind-index --dimensions=768 --metric=cosine >/dev/null 2>&1 || true

@@ -2,6 +2,7 @@ import { AgentWorkflow, type AgentWorkflowEvent, type AgentWorkflowStep } from "
 import type { OrchestratorAgent } from "../agents/orchestrator";
 import { renumberCitations } from "../agents/citations";
 import { getConfig } from "../lib/config";
+import { createFileStore } from "../lib/files";
 import type { Source } from "../lib/types";
 import { createLLM, extractJson, type LLMClient } from "../llm";
 import { reportMessages, researchQueriesMessages, researchReflectMessages } from "../llm/prompts";
@@ -95,10 +96,7 @@ export class DeepResearchWorkflow extends AgentWorkflow<OrchestratorAgent, DeepR
         temperature: 0.3,
       });
       const key = `reports/${userId}/${runId}.md`;
-      await this.env.FILES.put(key, result.text, {
-        httpMetadata: { contentType: "text/markdown; charset=utf-8" },
-        customMetadata: { userId, conversationId, runId },
-      });
+      await createFileStore(this.env).put(key, result.text, "text/markdown; charset=utf-8");
       return { report: result.text, reportKey: key, sources: merged.sources };
     });
 

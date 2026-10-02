@@ -3,6 +3,7 @@ import { NonRetryableError } from "cloudflare:workflows";
 import { audit } from "../lib/audit";
 import { isOffline } from "../lib/config";
 import { errorMessage } from "../lib/errors";
+import { createFileStore } from "../lib/files";
 import { newId } from "../lib/ids";
 import { createLogger } from "../lib/logger";
 import { createLLM } from "../llm";
@@ -12,7 +13,7 @@ import { createVectorStore } from "../memory/vectorStore";
 export interface IngestParams {
   documentId: string;
   userId: string;
-  r2Key: string;
+  storageKey: string;
   filename: string;
   mime: string;
   traceId: string;
@@ -26,7 +27,7 @@ const PLAIN_TEXT = new Set(["text/plain", "text/markdown", "text/csv", "applicat
 
 /**
  * Document ingestion as a durable Workflow:
- *   R2 file -> text (Workers AI toMarkdown for PDF/DOCX/HTML) -> chunks in D1
+ *   stored file -> text (Workers AI toMarkdown for PDF/DOCX/HTML) -> chunks in D1
  *   -> embeddings in batches -> Vectorize (namespace = user) -> status "ready".
  * Each batch is its own step, so a failure mid-way retries only that batch.
  */
@@ -67,9 +68,10 @@ export class IngestDocumentWorkflow extends WorkflowEntrypoint<Env, IngestParams
       .run();
   }
 
-  /** Converts the upload to text and stores it next to the original. Returns the text's R2 key. */
+  /** Converts the upload to text and stores it next to the original. Returns the text's storage key. */
   private async extract(p: IngestParams): Promise<string> {
-    const object = await this.env.FILES.get(p.r2Key);
+    const files = createFileStore(this.env);
+    const object = await files.get(p.storageKey);
     if (!object) throw new NonRetryableError("Uploaded file is missing from storage");
 
     let text: string;
@@ -86,14 +88,14 @@ export class IngestDocumentWorkflow extends WorkflowEntrypoint<Env, IngestParams
       text = converted.data;
     }
 
-    const textKey = p.r2Key.replace(/[^/]+$/, "extracted.md");
-    await this.env.FILES.put(textKey, text, { httpMetadata: { contentType: "text/markdown; charset=utf-8" } });
+    const textKey = p.storageKey.replace(/[^/]+$/, "extracted.md");
+    await files.put(textKey, text, "text/markdown; charset=utf-8");
     return textKey;
   }
 
   /** Splits text into chunks stored in D1. Idempotent: re-running replaces earlier chunks. */
   private async chunk(p: IngestParams, textKey: string): Promise<number> {
-    const object = await this.env.FILES.get(textKey);
+    const object = await createFileStore(this.env).get(textKey);
     if (!object) throw new Error("Extracted text is missing");
     const chunks = chunkText(await object.text());
 

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { audit } from "../lib/audit";
 import { getConfig } from "../lib/config";
 import { AppError, badRequest, notFound, rateLimited } from "../lib/errors";
+import { createFileStore } from "../lib/files";
 import { newId } from "../lib/ids";
 import { createVectorStore } from "../memory/vectorStore";
 import type { IngestParams } from "../workflows/ingest";
@@ -28,7 +29,7 @@ interface DocumentRow {
   chunk_count: number;
   error: string | null;
   created_at: number;
-  r2_key: string;
+  storage_key: string;
 }
 
 const view = (d: DocumentRow) => ({
@@ -71,20 +72,17 @@ export const documentRoutes = new Hono<AppEnv>()
     if (!mime) throw new AppError(415, "unsupported_type", `Supported types: ${Object.keys(TYPES_BY_EXTENSION).join(", ")}`);
 
     const documentId = newId("doc");
-    const r2Key = `docs/${userId}/${documentId}/${filename}`;
-    await c.env.FILES.put(r2Key, file.stream(), {
-      httpMetadata: { contentType: mime },
-      customMetadata: { userId, documentId },
-    });
+    const storageKey = `docs/${userId}/${documentId}/${filename}`;
+    await createFileStore(c.env).put(storageKey, await file.arrayBuffer(), mime);
     const now = Date.now();
     await c.env.DB.prepare(
-      `INSERT INTO documents (id, user_id, filename, mime, size, r2_key, status, created_at)
+      `INSERT INTO documents (id, user_id, filename, mime, size, storage_key, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
     )
-      .bind(documentId, userId, filename, mime, file.size, r2Key, now)
+      .bind(documentId, userId, filename, mime, file.size, storageKey, now)
       .run();
 
-    const params: IngestParams = { documentId, userId, r2Key, filename, mime, traceId: c.get("traceId") };
+    const params: IngestParams = { documentId, userId, storageKey, filename, mime, traceId: c.get("traceId") };
     const instance = await c.env.INGEST_WORKFLOW.create({ id: documentId, params });
     await c.env.DB.prepare(`UPDATE documents SET workflow_id = ? WHERE id = ?`).bind(instance.id, documentId).run();
     await audit(c.env.DB, { userId, action: "document.uploaded", target: documentId, meta: { filename, size: file.size }, ip: clientIp(c) });
@@ -100,7 +98,7 @@ export const documentRoutes = new Hono<AppEnv>()
           chunk_count: 0,
           error: null,
           created_at: now,
-          r2_key: r2Key,
+          storage_key: storageKey,
         }),
       },
       202,
@@ -146,8 +144,7 @@ export const documentRoutes = new Hono<AppEnv>()
       c.env.DB.prepare(`DELETE FROM chunks WHERE document_id = ?`).bind(id),
       c.env.DB.prepare(`DELETE FROM documents WHERE id = ?`).bind(id),
     ]);
-    const listed = await c.env.FILES.list({ prefix: `docs/${userId}/${id}/` });
-    if (listed.objects.length) await c.env.FILES.delete(listed.objects.map((o) => o.key));
+    await createFileStore(c.env).deletePrefix(`docs/${userId}/${id}/`);
     await audit(c.env.DB, { userId, action: "document.deleted", target: id });
     return c.body(null, 204);
   });
